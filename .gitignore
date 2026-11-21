@@ -1,2 +1,11 @@
-.env
-.env_model
+.env*
+!.env.example
+
+**/node_modules/
+**/.angular/
+**/dist/
+**/target/
+**/.gradle/
+**/build/
+*.log
+nginx-ubs/teste-resultado*.txt

@@ -36,9 +36,9 @@
         <mat-error *ngIf="agendamentoForm.get('dataConsulta')?.hasError('required')">Data é obrigatória</mat-error>
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Hora da Consulta</mat-label>
-        <input matInput type="time" formControlName="horaConsulta" required />
-        <mat-error *ngIf="agendamentoForm.get('horaConsulta')?.hasError('required')">Hora é obrigatória</mat-error>
+        <mat-label>Hora da Consulta (opcional)</mat-label>
+        <input matInput type="time" formControlName="horaConsulta" />
+        <mat-hint>Em branco, o agendamento fica com o horário a definir</mat-hint>
       </mat-form-field>
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>Observações</mat-label>
@@ -78,16 +78,29 @@
       </div>
     </form>
     
+    <div class="leitura-toolbar" *ngIf="leitura.suportado">
+      <button mat-stroked-button type="button" (click)="lerListaFiltrada()" aria-label="Ler em voz alta os agendamentos listados">
+        <mat-icon>volume_up</mat-icon> Ler lista
+      </button>
+      <button mat-button type="button" color="warn" (click)="pararLeitura()" [disabled]="!leitura.falando()" aria-label="Parar a leitura">
+        <mat-icon>stop</mat-icon> Parar
+      </button>
+      <span class="leitura-status" *ngIf="leitura.falando()" aria-live="polite">
+        Lendo… {{ leitura.pendentes() }} na fila
+      </span>
+    </div>
+
     <div class="table-container">
       <table mat-table [dataSource]="dataSource" class="mat-elevation-z2">
         <ng-container matColumnDef="paciente"><th mat-header-cell *matHeaderCellDef>Paciente</th><td mat-cell *matCellDef="let ag"> {{ ag.paciente?.nomeCompleto || 'N/A' }} </td></ng-container>
         <ng-container matColumnDef="medico"><th mat-header-cell *matHeaderCellDef>Médico</th><td mat-cell *matCellDef="let ag"> {{ ag.medico?.nomeCompleto || 'N/A' }} </td></ng-container>
-        <ng-container matColumnDef="dataHora"><th mat-header-cell *matHeaderCellDef>Data e Hora</th><td mat-cell *matCellDef="let ag"> {{ formatarDataHora(ag.dataHoraConsulta) }} </td></ng-container>
+        <ng-container matColumnDef="dataHora"><th mat-header-cell *matHeaderCellDef>Data e Hora</th><td mat-cell *matCellDef="let ag"> {{ formatarDataHora(ag.dataHoraConsulta, ag.horarioDefinido) }} </td></ng-container>
         <ng-container matColumnDef="tipoConsulta"><th mat-header-cell *matHeaderCellDef>Tipo</th><td mat-cell *matCellDef="let ag"> {{ ag.tipoConsulta }} </td></ng-container>
         <ng-container matColumnDef="status"><th mat-header-cell *matHeaderCellDef>Status</th><td mat-cell *matCellDef="let ag"><mat-chip-listbox><mat-chip [color]="getStatusColor(ag.status)" selected>{{ ag.status }}</mat-chip></mat-chip-listbox></td></ng-container>
         <ng-container matColumnDef="acoes">
           <th mat-header-cell *matHeaderCellDef>Ações</th>
           <td mat-cell *matCellDef="let ag">
+            <button mat-icon-button type="button" *ngIf="leitura.suportado" (click)="lerAgendamento(ag)" matTooltip="Ler em voz alta" aria-label="Ler agendamento em voz alta"><mat-icon>volume_up</mat-icon></button>
             <button mat-icon-button color="primary" (click)="confirmarAgendamento(ag.id)" *ngIf="ag.status === 'AGENDADO'" matTooltip="Confirmar Agendamento"><mat-icon>check_circle</mat-icon></button>
             <button mat-icon-button color="warn" (click)="cancelarAgendamento(ag.id)" *ngIf="ag.status === 'AGENDADO' || ag.status === 'CONFIRMADO'" matTooltip="Cancelar Agendamento"><mat-icon>cancel</mat-icon></button>
           </td>

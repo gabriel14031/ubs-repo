@@ -145,3 +145,16 @@ mat-card {
     grid-template-columns: 1fr;
   }
 }
+
+.leitura-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  .leitura-status {
+    color: #555;
+    font-size: 0.9rem;
+  }
+}

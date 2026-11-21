@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, AfterViewInit } from '@angular/core'; // Adicionado ViewChild e AfterViewInit
+import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit } from '@angular/core'; // Adicionado ViewChild e AfterViewInit
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Observable, map, startWith } from 'rxjs';
@@ -12,6 +12,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table'; // Adicionado MatTableDataSource
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator'; // Adicionado MatPaginator
 import { MAT_DATE_LOCALE, MatOptionModule } from '@angular/material/core';
@@ -20,6 +21,7 @@ import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import { AgendamentoService } from '../service/agendamento.service';
 import { PacienteService } from '../service/paciente.service';
 import { MedicoService } from '../service/medico.service';
+import { LeituraVozService } from '../service/leitura-voz.service';
 import { Agendamento, AgendamentoRequest, StatusAgendamento, TIPOS_CONSULTA } from '../model/agendamento.model';
 import { Paciente } from '../model/paciente.model';
 import { Medico } from '../model/medico.model';
@@ -41,7 +43,8 @@ export const MY_FORMATS = {
     CommonModule, ReactiveFormsModule, MatCardModule, MatFormFieldModule,
     MatInputModule, MatSelectModule, MatOptionModule, MatAutocompleteModule,
     MatButtonModule, MatTableModule, MatIconModule, MatChipsModule,
-    MatDatepickerModule, MatSnackBarModule, MatPaginatorModule // Adicionado MatPaginatorModule
+    MatDatepickerModule, MatSnackBarModule, MatPaginatorModule, // Adicionado MatPaginatorModule
+    MatTooltipModule
   ],
   templateUrl: './agendamento.component.html',
   styleUrls: ['./agendamento.component.scss'],
@@ -51,7 +54,7 @@ export const MY_FORMATS = {
     { provide: MAT_DATE_FORMATS, useValue: MY_FORMATS },
   ]
 })
-export class AgendamentoComponent implements OnInit, AfterViewInit {
+export class AgendamentoComponent implements OnInit, AfterViewInit, OnDestroy {
   agendamentoForm: FormGroup;
   filtroForm: FormGroup;
   pacientes: Paciente[] = [];
@@ -71,12 +74,15 @@ export class AgendamentoComponent implements OnInit, AfterViewInit {
     private agendamentoService: AgendamentoService,
     private pacienteService: PacienteService,
     private medicoService: MedicoService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    public leitura: LeituraVozService
   ) {
     this.agendamentoForm = this.fb.group({
       pacienteInput: [''], pacienteId: ['', Validators.required],
       tipoConsulta: ['', Validators.required], medicoId: ['', Validators.required],
-      dataConsulta: ['', Validators.required], horaConsulta: ['', Validators.required],
+      dataConsulta: ['', Validators.required],
+      // Hora opcional: em branco, o agendamento fica sem horário definido.
+      horaConsulta: [''],
       observacoes: ['']
     });
 
@@ -104,6 +110,30 @@ export class AgendamentoComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit(): void {
     this.dataSource.paginator = this.paginator;
+  }
+
+  ngOnDestroy(): void {
+    // Ao sair da tela, interrompe qualquer leitura em andamento.
+    this.leitura.parar();
+  }
+
+  // --- LEITURA EM VOZ ALTA (text-to-speech, baseada em Fila) ---
+  lerAgendamento(ag: Agendamento): void {
+    this.leitura.enfileirar(this.leitura.descreverAgendamento(ag));
+  }
+
+  /** Enfileira todos os agendamentos que passam pelos filtros atuais, na ordem da tabela. */
+  lerListaFiltrada(): void {
+    const itens = this.dataSource.filteredData;
+    if (itens.length === 0) {
+      this.mostrarMensagem('Não há agendamentos para ler.');
+      return;
+    }
+    this.leitura.enfileirarVarios(itens.map(ag => this.leitura.descreverAgendamento(ag)));
+  }
+
+  pararLeitura(): void {
+    this.leitura.parar();
   }
 
   // --- MÉTODOS DE CARREGAMENTO DE DADOS ---
@@ -264,11 +294,27 @@ export class AgendamentoComponent implements OnInit, AfterViewInit {
     }
   }
 
-  formatarDataHora(s: string): string { return new Date(s).toLocaleString('pt-BR'); }
+  /**
+   * Agendamento sem hora marcada é gravado à meia-noite; nesse caso mostramos
+   * só a data. O backend informa isso em "horarioDefinido"; a verificação da
+   * meia-noite fica como reserva para registros antigos, anteriores ao campo.
+   */
+  formatarDataHora(s: string, horarioDefinido?: boolean): string {
+    const quando = new Date(s);
+    const semHora = horarioDefinido === false
+      || (horarioDefinido === undefined
+          && quando.getHours() === 0 && quando.getMinutes() === 0);
+
+    return semHora
+      ? `${quando.toLocaleDateString('pt-BR')} — horário a definir`
+      : quando.toLocaleString('pt-BR');
+  }
   private _montarRequest(): AgendamentoRequest {
     const f = this.agendamentoForm.value;
     const dataSelecionada = new Date(f.dataConsulta);
-    const hora = f.horaConsulta;
+    // Hora em branco vira meia-noite: é assim que o backend representa um
+    // agendamento sem horário definido.
+    const hora = (f.horaConsulta || '').trim() || '00:00';
     dataSelecionada.setMinutes(dataSelecionada.getMinutes() - dataSelecionada.getTimezoneOffset());
     const dataISO = dataSelecionada.toISOString().slice(0, 10);
     const dataHoraParaBackend = `${dataISO}T${hora}`;
